@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Oct  3 13:03:24 2023
+
+@author: achref
+"""
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data import DataLoader
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
+import torchvision
+
+class LeNet(nn.Module):
+    def __init__(self,in_channels=3,num_classes=10):
+        super(LeNet,self).__init__()
+        
+        
+ 
+        self.relu  = nn.ReLU()
+        self.conv1  = nn.Conv2d(in_channels=3, out_channels=6, kernel_size=(5,5),stride=(1,1),padding=(0,0))
+        self.conv2  = nn.Conv2d(in_channels=6, out_channels=16, kernel_size=(5,5),stride=(1,1),padding=(0,0))
+        self.conv3  = nn.Conv2d(in_channels=16, out_channels=120, kernel_size=(5,5),stride=(1,1),padding=(0,0))
+        
+        self.linear1 = nn.Linear(120, 84)
+        self.linear2 = nn.Linear(84, 10)
+        
+        self.pool = nn.AvgPool2d(kernel_size=(2,2), stride = (2,2))
+        
+        
+    def forward(self,x):
+
+        x = self.pool(self.relu(self.conv1(x))) 
+        x = self.pool(self.relu(self.conv2(x))) 
+        x = self.relu(self.conv3(x))
+
+        x = x.reshape(x.shape[0],-1)
+        
+        x = self.relu(self.linear1(x))
+        x = self.linear2(x)
+        
+        return x
+    
+    
+    
+device=torch.device('cude' if torch.cuda.is_available() else 'cpu')
+
+in_channels=3
+num_classes=10
+lr=0.001
+bach_size= 10
+epoches= 5
+load_model=False
+
+
+
+
+train_dataset= datasets.CIFAR10(root='dataset/',train=True,transform=transforms.ToTensor(),download=True)
+train_loader=DataLoader(dataset=train_dataset,batch_size=bach_size,shuffle=True)
+
+
+test_dataset= datasets.CIFAR10(root='dataset/',train=False,transform=transforms.ToTensor(),download=True)
+test_loader=DataLoader(dataset=test_dataset,batch_size=bach_size,shuffle=True)
+
+
+model=LeNet()
+
+ 
+
+print(model)
+model.to(device)
+criterion=nn.CrossEntropyLoss()
+optimizer=optim.Adam(model.parameters(),lr)
+
+ 
+
+for epoch in range(epoches):
+    losses=[]
+    
+ 
+    
+    for batch_idx, (data,targets) in enumerate(train_loader):
+        data = data.to(device=device)
+        targets = targets.to(device=device)
+        print(targets.shape[0])
+
+        
+        #forward
+        scores = model(data)
+        loss = criterion(scores,targets)
+        losses.append(loss.item())
+        
+        # backward
+        optimizer.zero_grad()
+        loss.backward()
+        
+        print(f'Loss of ech was {loss: .5f}')
+
+        #gradient descent
+        optimizer.step()
+    mean_loss= sum(losses)/len(losses)
+    print(f'Loss of ech {epoch} was {mean_loss: .5f}')
+    
+#check acc
+
+def check_acc(loader,model):
+    
+    if loader.dataset.train :
+        print('checking acc on training data')
+    else:
+        print('checking acc on test data')
+    num_correct=0
+    num_samples=0
+    model.eval()
+    with torch.no_grad():
+        for x,y in loader :
+            x=x.to(device=device)
+            y=y.to(device=device)
+            
+            scores = model(x)
+            _, preds = scores.max(1)
+            num_correct+=(preds==y).sum()
+            num_samples+=preds.size(0)
+            
+        print(f'Got {num_correct} / {num_samples} with accuracy {float(num_correct)/float(num_samples)*100}')
+    
+    model.train()
+ 
+
+check_acc(train_loader, model)
+check_acc(test_loader, model)
+    
+    
